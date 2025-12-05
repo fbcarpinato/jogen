@@ -1,0 +1,6 @@
+[package]
+name = "jogen-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
