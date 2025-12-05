@@ -12,3 +12,5 @@ authors = ["Fabio Carpinato"]
 license = "MIT"
 
 [workspace.dependencies]
+anyhow = "1.0.100"
+thiserror = "2.0.17"

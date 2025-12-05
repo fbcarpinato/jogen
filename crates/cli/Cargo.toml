@@ -4,3 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+
+jogen-core = { path = "../core" }
+
+clap = { version = "4.5.53", features = ["cargo", "derive"] }
+anyhow.workspace = true
+colored = "3.0.0"
