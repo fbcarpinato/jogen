@@ -19,7 +19,7 @@ pub fn execute(target_path: Option<PathBuf>) -> Result<PathBuf> {
     let jogen_dir = root.join(".jogen");
 
     if jogen_dir.exists() {
-        return Err(JogenError::ProjectAlreadyExists(root.display().to_string()));
+        return Err(JogenError::ProjectExists(root.display().to_string()));
     }
 
     let folders = vec![jogen_dir.join("objects")];

@@ -9,3 +9,7 @@ thiserror.workspace = true
 walkdir = "2.5.0"
 toml = "0.9.8"
 serde = { version = "1.0.228", features = ["derive"] }
+blake3 = "1.8.2"
+zstd = "0.13.3"
+hex = "0.4.3"
+tempfile = "3.23.0"

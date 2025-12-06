@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "jogen")]
@@ -16,6 +15,10 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     Init(InitArgs),
+
+    HashObject { file: PathBuf },
+
+    CatFile { hash: String },
 }
 
 #[derive(Args)]

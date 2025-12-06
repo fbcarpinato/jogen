@@ -12,6 +12,12 @@ fn main() -> Result<()> {
         Commands::Init(args) => {
             commands::init::handle(args)?;
         }
+        Commands::HashObject { file } => {
+            commands::plumbing::hash_object(file)?;
+        }
+        Commands::CatFile { hash } => {
+            commands::plumbing::cat_file(hash)?;
+        }
     }
 
     Ok(())
