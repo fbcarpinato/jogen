@@ -21,6 +21,9 @@ fn main() -> Result<()> {
         Commands::WriteDirectory {} => {
             commands::plumbing::write_directory()?;
         }
+        Commands::ReadDirectory { hash } => {
+            commands::plumbing::read_directory(hash)?;
+        }
     }
 
     Ok(())

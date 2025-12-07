@@ -57,6 +57,65 @@ impl Directory {
     pub fn add_entry(&mut self, entry: DirectoryEntry) {
         self.entries.push(entry);
     }
+
+    pub fn entries(&self) -> &Vec<DirectoryEntry> {
+        &self.entries
+    }
+
+    pub fn parse(data: &[u8]) -> Result<Self> {
+        let mut entries = Vec::new();
+        let mut cursor = 0;
+        let len = data.len();
+
+        while cursor < len {
+            let space_idx = data[cursor..]
+                .iter()
+                .position(|&b| b == b' ')
+                .ok_or_else(|| JogenError::ObjectCorrupt("Missing space after mode".into()))?
+                + cursor;
+
+            let mode_bytes = &data[cursor..space_idx];
+            let mode_str = std::str::from_utf8(mode_bytes)
+                .map_err(|_| JogenError::ObjectCorrupt("Invalid mode string".into()))?;
+
+            let mode = match mode_str {
+                "100644" => EntryMode::File,
+                "100755" => EntryMode::Executable,
+                "040000" => EntryMode::Directory,
+                _ => {
+                    return Err(JogenError::ObjectCorrupt(format!(
+                        "Unknown mode: {}",
+                        mode_str
+                    )))
+                }
+            };
+
+            cursor = space_idx + 1;
+
+            let null_idx = data[cursor..].iter().position(|&b| b == 0).ok_or_else(|| {
+                JogenError::ObjectCorrupt("Missing null terminator for name".into())
+            })? + cursor;
+
+            let name_bytes = &data[cursor..null_idx];
+            let name = std::str::from_utf8(name_bytes)
+                .map_err(|_| JogenError::ObjectCorrupt("Invalid UTF-8 filename".into()))?
+                .to_string();
+
+            cursor = null_idx + 1;
+
+            if cursor + 32 > len {
+                return Err(JogenError::ObjectCorrupt("Truncated hash bytes".into()));
+            }
+            let hash_bytes = &data[cursor..cursor + 32];
+            let hash = hex::encode(hash_bytes); // Convert back to hex for the struct
+
+            cursor += 32;
+
+            entries.push(DirectoryEntry { mode, name, hash });
+        }
+
+        Ok(Self { entries })
+    }
 }
 
 impl JogenObject for Directory {

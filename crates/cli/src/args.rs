@@ -21,6 +21,8 @@ pub enum Commands {
     CatFile { hash: String },
 
     WriteDirectory {},
+
+    ReadDirectory { hash: String },
 }
 
 #[derive(Args)]
