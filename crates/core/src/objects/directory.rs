@@ -11,13 +11,15 @@ pub enum EntryMode {
     Executable = 0o2, // Internal ID 2
     Directory = 0o4,  // Internal ID 4
 }
+
 impl TryFrom<u8> for EntryMode {
     type Error = JogenError;
 
     fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
-            0 => Ok(EntryMode::File),
-            1 => Ok(EntryMode::Directory),
+            0o1 => Ok(EntryMode::File),
+            0o2 => Ok(EntryMode::Executable),
+            0o4 => Ok(EntryMode::Directory),
             _ => Err(JogenError::InvalidEntryMode(value)),
         }
     }
