@@ -19,6 +19,8 @@ pub enum Commands {
     HashObject { file: PathBuf },
 
     CatFile { hash: String },
+
+    WriteDirectory {},
 }
 
 #[derive(Args)]

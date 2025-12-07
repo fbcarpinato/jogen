@@ -18,6 +18,9 @@ fn main() -> Result<()> {
         Commands::CatFile { hash } => {
             commands::plumbing::cat_file(hash)?;
         }
+        Commands::WriteDirectory {} => {
+            commands::plumbing::write_directory()?;
+        }
     }
 
     Ok(())

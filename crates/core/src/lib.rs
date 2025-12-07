@@ -1,5 +1,7 @@
+pub mod indexer;
 pub mod init;
 pub mod object_store;
+pub mod objects;
 
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -19,6 +21,9 @@ pub enum JogenError {
 
     #[error("Object is corrupt or has invalid header: {0}")]
     ObjectCorrupt(String),
+
+    #[error("Invalid Entry Mode: {0}")]
+    InvalidEntryMode(u8),
 
     // --- System Errors ---
     #[error("Input/Output Error: {0}")]

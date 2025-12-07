@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use colored::*;
+use jogen_core::indexer::Indexer;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -33,6 +34,23 @@ pub fn cat_file(hash: String) -> Result<()> {
     eprintln!("{} {}", "Type:".dimmed(), kind.to_string().yellow());
 
     io::stdout().write_all(&content)?;
+
+    Ok(())
+}
+
+pub fn write_directory() -> Result<()> {
+    let current_dir = std::env::current_dir()?;
+    let root_path = jogen_core::find_root(&current_dir)?;
+
+    let objects_dir = root_path.join(".jogen").join("objects");
+
+    let store = ObjectStore::new(objects_dir.clone());
+    let indexer = Indexer::new(&store);
+
+    match indexer.index_path(&root_path)? {
+        Some(hash) => println!("{}", hash.cyan()),
+        None => println!("{}", "Nothing to save (empty project)".yellow()),
+    }
 
     Ok(())
 }
