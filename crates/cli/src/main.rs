@@ -24,6 +24,9 @@ fn main() -> Result<()> {
         Commands::ReadDirectory { hash } => {
             commands::plumbing::read_directory(hash)?;
         }
+        Commands::WriteSnapshot {} => {
+            commands::plumbing::write_snapshot()?;
+        }
     }
 
     Ok(())

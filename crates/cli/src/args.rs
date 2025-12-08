@@ -23,6 +23,8 @@ pub enum Commands {
     WriteDirectory {},
 
     ReadDirectory { hash: String },
+
+    WriteSnapshot {},
 }
 
 #[derive(Args)]

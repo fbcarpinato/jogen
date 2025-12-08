@@ -5,6 +5,7 @@ use crate::Result;
 
 pub mod blob;
 pub mod directory;
+pub mod snapshot;
 
 pub trait JogenObject {
     fn object_type(&self) -> ObjectType;

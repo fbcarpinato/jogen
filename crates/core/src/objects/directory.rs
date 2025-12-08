@@ -58,7 +58,7 @@ impl Directory {
         self.entries.push(entry);
     }
 
-    pub fn entries(&self) -> &Vec<DirectoryEntry> {
+    pub fn entries(&self) -> &[DirectoryEntry] {
         &self.entries
     }
 
