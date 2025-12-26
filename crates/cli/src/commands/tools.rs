@@ -1,28 +1,29 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use colored::*;
-use jogen_core::indexer::Indexer;
-use jogen_core::objects::directory::Directory;
-use jogen_core::objects::snapshot::{Snapshot, SnapshotContext};
-use jogen_core::objects::JogenObject;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use jogen_core::object_store::{ObjectStore, ObjectType};
+use crate::commands::JogenRepo;
+
+use jogen_core::{
+    indexer::Indexer,
+    object_store::ObjectType,
+    objects::{
+        directory::Directory,
+        snapshot::{Snapshot, SnapshotContext},
+        JogenObject,
+    },
+};
 
 pub fn hash_object(file_path: PathBuf) -> Result<()> {
-    let current_dir = std::env::current_dir()?;
-    let root_path = jogen_core::find_root(&current_dir)?;
+    let repo = JogenRepo::from_cwd()?;
 
     let content =
         fs::read(&file_path).with_context(|| format!("Could not read file: {:?}", file_path))?;
 
-    let objects_dir = root_path.join(".jogen").join("objects");
-
-    let store = ObjectStore::new(objects_dir);
-
-    let hash = store.write_object(&content, ObjectType::Blob)?;
+    let hash = repo.object_store.write_object(&content, ObjectType::Blob)?;
 
     println!("{}", hash.cyan());
 
@@ -30,14 +31,9 @@ pub fn hash_object(file_path: PathBuf) -> Result<()> {
 }
 
 pub fn cat_file(hash: String) -> Result<()> {
-    let current_dir = std::env::current_dir()?;
-    let root_path = jogen_core::find_root(&current_dir)?;
+    let repo = JogenRepo::from_cwd()?;
 
-    let objects_dir = root_path.join(".jogen").join("objects");
-
-    let store = ObjectStore::new(objects_dir);
-
-    let (kind, content) = store.read_object(&hash)?;
+    let (kind, content) = repo.object_store.read_object(&hash)?;
 
     eprintln!("{} {}", "Type:".dimmed(), kind.to_string().yellow());
 
@@ -47,15 +43,11 @@ pub fn cat_file(hash: String) -> Result<()> {
 }
 
 pub fn write_directory() -> Result<()> {
-    let current_dir = std::env::current_dir()?;
-    let root_path = jogen_core::find_root(&current_dir)?;
+    let repo = JogenRepo::from_cwd()?;
 
-    let objects_dir = root_path.join(".jogen").join("objects");
+    let indexer = Indexer::new(&repo.object_store);
 
-    let store = ObjectStore::new(objects_dir.clone());
-    let indexer = Indexer::new(&store);
-
-    match indexer.index_path(&root_path)? {
+    match indexer.index_path(&repo.root_path)? {
         Some(hash) => println!("{}", hash.cyan()),
         None => println!("{}", "Nothing to save (empty project)".yellow()),
     }
@@ -64,14 +56,9 @@ pub fn write_directory() -> Result<()> {
 }
 
 pub fn read_directory(hash: String) -> Result<()> {
-    let current_dir = std::env::current_dir()?;
-    let root_path = jogen_core::find_root(&current_dir)?;
+    let repo = JogenRepo::from_cwd()?;
 
-    let objects_dir = root_path.join(".jogen").join("objects");
-
-    let store = ObjectStore::new(objects_dir);
-
-    let (kind, content) = store.read_object(&hash)?;
+    let (kind, content) = repo.object_store.read_object(&hash)?;
 
     if kind != ObjectType::Directory {
         return Err(anyhow::anyhow!(
@@ -97,17 +84,12 @@ pub fn read_directory(hash: String) -> Result<()> {
 }
 
 pub fn write_snapshot() -> Result<()> {
-    let current_dir = std::env::current_dir()?;
-    let root_path = jogen_core::find_root(&current_dir)?;
+    let repo = JogenRepo::from_cwd()?;
 
-    let objects_dir = root_path.join(".jogen").join("objects");
-
-    let store = ObjectStore::new(objects_dir.clone());
-
-    let indexer = Indexer::new(&store);
+    let indexer = Indexer::new(&repo.object_store);
 
     let directory_hash = indexer
-        .index_path(&root_path)?
+        .index_path(&repo.root_path)?
         .ok_or_else(|| anyhow::anyhow!("Cannot snapshot an empty project"))?;
 
     println!("Directory Hash: {}", directory_hash.yellow());
@@ -121,7 +103,9 @@ pub fn write_snapshot() -> Result<()> {
         "Snapshot created via plumbing command".to_string(),
     );
 
-    let snapshot_hash = store.write_object(snapshot.serialize()?.as_ref(), ObjectType::Snapshot)?;
+    let snapshot_hash = repo
+        .object_store
+        .write_object(snapshot.serialize()?.as_ref(), ObjectType::Snapshot)?;
 
     println!("Snapshot Hash:  {}", snapshot_hash.green().bold());
     println!("\nTo verify: jogen cat-file {}", snapshot_hash);
@@ -130,14 +114,9 @@ pub fn write_snapshot() -> Result<()> {
 }
 
 pub fn read_snapshot(hash: String) -> Result<()> {
-    let current_dir = std::env::current_dir()?;
-    let root_path = jogen_core::find_root(&current_dir)?;
+    let repo = JogenRepo::from_cwd()?;
 
-    let objects_dir = root_path.join(".jogen").join("objects");
-
-    let store = ObjectStore::new(objects_dir);
-
-    let (kind, content) = store.read_object(&hash)?;
+    let (kind, content) = repo.object_store.read_object(&hash)?;
 
     if kind != ObjectType::Snapshot {
         return Err(anyhow::anyhow!(
@@ -166,22 +145,17 @@ pub fn read_snapshot(hash: String) -> Result<()> {
 }
 
 pub fn history() -> Result<()> {
-    let current_dir = std::env::current_dir()?;
-    let root_path = jogen_core::find_root(&current_dir)?;
-
-    let objects_dir = root_path.join(".jogen").join("objects");
-
-    let store = ObjectStore::new(objects_dir.clone());
+    let repo = JogenRepo::from_cwd()?;
 
     let mut current_hash = {
-        let ref_store = jogen_core::ref_store::RefStore::new(root_path);
+        let ref_store = jogen_core::ref_store::RefStore::new(repo.root_path);
         ref_store
             .read_head()?
             .ok_or_else(|| anyhow::anyhow!("No snapshots found (head is empty)"))?
     };
 
     while !current_hash.is_empty() {
-        let (kind, content) = store.read_object(&current_hash)?;
+        let (kind, content) = repo.object_store.read_object(&current_hash)?;
 
         if kind != ObjectType::Snapshot {
             return Err(anyhow::anyhow!(

@@ -36,6 +36,9 @@ fn main() -> Result<()> {
         Commands::History {} => {
             commands::tools::history()?;
         }
+        Commands::Checkout { hash } => {
+            commands::actions::checkout(hash)?;
+        }
     }
 
     Ok(())

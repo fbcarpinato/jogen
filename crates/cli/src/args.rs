@@ -32,6 +32,8 @@ pub enum Commands {
     Save(SaveArgs),
 
     History {},
+
+    Checkout { hash: String },
 }
 
 #[derive(Args)]

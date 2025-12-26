@@ -1,3 +1,4 @@
+pub mod hydrator;
 pub mod indexer;
 pub mod init;
 pub mod object_store;

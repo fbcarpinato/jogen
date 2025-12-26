@@ -164,4 +164,14 @@ impl ObjectStore {
 
         Ok((header.kind, data_bytes.to_vec()))
     }
+
+    pub fn exists(&self, hash_hex: &str) -> bool {
+        if hash_hex.len() < 2 {
+            return false;
+        }
+
+        let (subdir, filename) = hash_hex.split_at(2);
+        let file_path = self.root_path.join(subdir).join(filename);
+        file_path.exists()
+    }
 }
