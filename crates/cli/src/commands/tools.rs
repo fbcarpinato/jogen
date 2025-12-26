@@ -128,3 +128,84 @@ pub fn write_snapshot() -> Result<()> {
 
     Ok(())
 }
+
+pub fn read_snapshot(hash: String) -> Result<()> {
+    let current_dir = std::env::current_dir()?;
+    let root_path = jogen_core::find_root(&current_dir)?;
+
+    let objects_dir = root_path.join(".jogen").join("objects");
+
+    let store = ObjectStore::new(objects_dir);
+
+    let (kind, content) = store.read_object(&hash)?;
+
+    if kind != ObjectType::Snapshot {
+        return Err(anyhow::anyhow!(
+            "Object {} is a {}, not a snapshot",
+            hash,
+            kind
+        ));
+    }
+
+    let snapshot = Snapshot::deserialize(&content)?;
+
+    println!("Snapshot Hash:   {}", hash.green().bold());
+    println!("Directory Hash:  {}", snapshot.directory_hash.yellow());
+    println!(
+        "Context:         {}",
+        format!("{:?}", snapshot.context).yellow()
+    );
+    println!("Author:          {}", snapshot.author.yellow());
+    println!(
+        "Timestamp:       {}",
+        snapshot.timestamp.to_string().yellow()
+    );
+    println!("\nMessage:\n{}", snapshot.message);
+
+    Ok(())
+}
+
+pub fn history() -> Result<()> {
+    let current_dir = std::env::current_dir()?;
+    let root_path = jogen_core::find_root(&current_dir)?;
+
+    let objects_dir = root_path.join(".jogen").join("objects");
+
+    let store = ObjectStore::new(objects_dir.clone());
+
+    let mut current_hash = {
+        let ref_store = jogen_core::ref_store::RefStore::new(root_path);
+        ref_store
+            .read_head()?
+            .ok_or_else(|| anyhow::anyhow!("No snapshots found (head is empty)"))?
+    };
+
+    while !current_hash.is_empty() {
+        let (kind, content) = store.read_object(&current_hash)?;
+
+        if kind != ObjectType::Snapshot {
+            return Err(anyhow::anyhow!(
+                "Object {} is a {}, not a snapshot",
+                current_hash,
+                kind
+            ));
+        }
+
+        let snapshot = Snapshot::deserialize(&content)?;
+
+        println!("{} {}", "Snapshot:".dimmed(), current_hash.green().bold());
+        println!("Author:    {}", snapshot.author.yellow());
+        println!("Timestamp: {}", snapshot.timestamp.to_string().yellow());
+        println!("Context:   {}", format!("{:?}", snapshot.context).yellow());
+        println!("Message:   {}", snapshot.message);
+        println!();
+
+        if snapshot.parent_hashes.is_empty() {
+            break;
+        } else {
+            current_hash = snapshot.parent_hashes[0].clone();
+        }
+    }
+
+    Ok(())
+}

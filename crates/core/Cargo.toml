@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+clap.workspace = true
 
 walkdir = "2.5.0"
 toml = "0.9.8"

@@ -10,22 +10,31 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Init(args) => {
-            commands::init::handle(args)?;
+            commands::actions::handle(args)?;
         }
         Commands::HashObject { file } => {
-            commands::plumbing::hash_object(file)?;
+            commands::tools::hash_object(file)?;
         }
         Commands::CatFile { hash } => {
-            commands::plumbing::cat_file(hash)?;
+            commands::tools::cat_file(hash)?;
         }
         Commands::WriteDirectory {} => {
-            commands::plumbing::write_directory()?;
+            commands::tools::write_directory()?;
         }
         Commands::ReadDirectory { hash } => {
-            commands::plumbing::read_directory(hash)?;
+            commands::tools::read_directory(hash)?;
         }
         Commands::WriteSnapshot {} => {
-            commands::plumbing::write_snapshot()?;
+            commands::tools::write_snapshot()?;
+        }
+        Commands::ReadSnapshot { hash } => {
+            commands::tools::read_snapshot(hash)?;
+        }
+        Commands::Save(args) => {
+            commands::actions::save(args)?;
+        }
+        Commands::History {} => {
+            commands::tools::history()?;
         }
     }
 

@@ -2,6 +2,7 @@ pub mod indexer;
 pub mod init;
 pub mod object_store;
 pub mod objects;
+pub mod ref_store;
 
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -52,4 +53,9 @@ pub fn find_root(start_path: &Path) -> Result<PathBuf> {
             }
         }
     }
+}
+
+pub fn find_root_from_cwd() -> Result<PathBuf> {
+    let current_dir = std::env::current_dir().map_err(JogenError::Io)?;
+    find_root(&current_dir)
 }

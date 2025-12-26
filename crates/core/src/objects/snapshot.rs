@@ -4,8 +4,9 @@ use std::fmt::{self, Write};
 use crate::object_store::ObjectType;
 use crate::objects::JogenObject;
 use crate::Result;
+use clap::ValueEnum;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum SnapshotContext {
     Feature,
     Fix,
@@ -32,7 +33,7 @@ impl SnapshotContext {
 
 impl fmt::Display for SnapshotContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -106,5 +107,64 @@ impl JogenObject for Snapshot {
         out.push_str(&self.message);
 
         Ok(Cow::Owned(out.into_bytes()))
+    }
+}
+
+impl Snapshot {
+    pub fn deserialize(data: &[u8]) -> Result<Self> {
+        let content = String::from_utf8_lossy(data);
+        let mut lines = content.lines();
+
+        let mut directory_hash = String::new();
+        let mut parent_hashes = Vec::new();
+        let mut author = String::new();
+        let mut timestamp = 0i64;
+        let mut context = SnapshotContext::Chore;
+        let mut message_lines = Vec::new();
+
+        while let Some(line) = lines.next() {
+            if line.is_empty() {
+                break;
+            }
+
+            let mut parts = line.splitn(2, ' ');
+            let key = parts.next().unwrap_or("");
+            let value = parts.next().unwrap_or("");
+
+            match key {
+                "directory" => directory_hash = value.to_string(),
+                "parent" => parent_hashes.push(value.to_string()),
+                "author" => author = value.to_string(),
+                "time" => timestamp = value.parse().unwrap_or(0),
+                "context" => {
+                    context = match value {
+                        "feature" => SnapshotContext::Feature,
+                        "fix" => SnapshotContext::Fix,
+                        "refactor" => SnapshotContext::Refactor,
+                        "docs" => SnapshotContext::Docs,
+                        "chore" => SnapshotContext::Chore,
+                        "merge" => SnapshotContext::Merge,
+                        "initial" => SnapshotContext::Initial,
+                        _ => SnapshotContext::Chore,
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for line in lines {
+            message_lines.push(line);
+        }
+
+        let message = message_lines.join("\n");
+
+        Ok(Snapshot {
+            directory_hash,
+            parent_hashes,
+            author,
+            timestamp,
+            context,
+            message,
+        })
     }
 }
