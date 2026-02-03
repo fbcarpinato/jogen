@@ -119,7 +119,42 @@ pub fn checkout(target_snapshot_hash: String) -> Result<()> {
 
     repo.ref_store.update_head(&target_snapshot_hash)?;
 
-    println!("{}", "✔ Checkout complete".green());
+    println!("{} Checkout complete", "✔".green());
+
+    Ok(())
+}
+
+pub fn create_track(name: String) -> Result<()> {
+    let repo = JogenRepo::from_cwd()?;
+
+    let current_hash = repo
+        .ref_store
+        .read_head()?
+        .ok_or_else(|| anyhow::anyhow!("Cannot create track: History is empty."))?;
+
+    repo.ref_store.create_track(&name, &current_hash)?;
+    println!("{} Created track {}", "✔".green(), name.yellow());
+
+    Ok(())
+}
+
+pub fn list_tracks() -> Result<()> {
+    let repo = JogenRepo::from_cwd()?;
+
+    let current = repo.ref_store.current_track()?;
+    let tracks = repo.ref_store.list_tracks()?;
+
+    if tracks.is_empty() {
+        println!("{}", "No tracks found.".dimmed());
+    }
+
+    for track in tracks {
+        if Some(&track) == current.as_ref() {
+            println!("* {} {}", track.yellow(), "(current)".dimmed());
+        } else {
+            println!("  {}", track);
+        }
+    }
 
     Ok(())
 }

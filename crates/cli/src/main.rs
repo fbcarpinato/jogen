@@ -39,6 +39,12 @@ fn main() -> Result<()> {
         Commands::Checkout { hash } => {
             commands::actions::checkout(hash)?;
         }
+        Commands::CreateTrack { name } => {
+            commands::actions::create_track(name)?;
+        }
+        Commands::ListTracks {} => {
+            commands::tools::list_tracks()?;
+        }
     }
 
     Ok(())

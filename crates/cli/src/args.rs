@@ -34,6 +34,10 @@ pub enum Commands {
     History {},
 
     Checkout { hash: String },
+
+    CreateTrack { name: String },
+
+    ListTracks {},
 }
 
 #[derive(Args)]
