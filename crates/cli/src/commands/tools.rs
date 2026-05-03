@@ -45,7 +45,7 @@ pub fn cat_file(hash: String) -> Result<()> {
 pub fn write_directory() -> Result<()> {
     let repo = JogenRepo::from_cwd()?;
 
-    let indexer = Indexer::new(&repo.object_store);
+    let indexer = Indexer::new(&repo.object_store, &repo.root_path);
 
     match indexer.index_path(&repo.root_path)? {
         Some(hash) => println!("{}", hash.cyan()),
@@ -86,7 +86,7 @@ pub fn read_directory(hash: String) -> Result<()> {
 pub fn write_snapshot() -> Result<()> {
     let repo = JogenRepo::from_cwd()?;
 
-    let indexer = Indexer::new(&repo.object_store);
+    let indexer = Indexer::new(&repo.object_store, &repo.root_path);
 
     let directory_hash = indexer
         .index_path(&repo.root_path)?

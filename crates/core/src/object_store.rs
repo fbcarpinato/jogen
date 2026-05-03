@@ -116,7 +116,7 @@ impl ObjectStore {
         let file = NamedTempFile::new_in(&dir_path).map_err(JogenError::Io)?;
 
         let file = {
-            let mut encoder = zstd::stream::Encoder::new(file, 0).map_err(JogenError::Io)?;
+            let mut encoder = zstd::stream::Encoder::new(file, 1).map_err(JogenError::Io)?;
             encoder.write_all(&header_bytes).map_err(JogenError::Io)?;
             encoder.write_all(data).map_err(JogenError::Io)?;
             encoder.finish().map_err(JogenError::Io)?

@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs;
 #[cfg(unix)]
@@ -32,39 +33,39 @@ impl<'a> Hydrator<'a> {
         let new_dir = self.load_directory(new_tree_hash)?;
 
         // 2. Index the OLD directory for fast lookups
-        let mut old_map: HashMap<String, _> = old_dir
+        let old_map: HashMap<String, _> = old_dir
             .entries()
             .iter()
             .map(|e| (e.name.clone(), e))
             .collect();
 
-        // 3. Iterate through NEW entries to handle creations and updates.
-        for new_entry in new_dir.entries() {
-            let child_path = current_path.join(&new_entry.name);
+        // 3. Collect entries to process so we can do it in parallel
+        let new_entries: Vec<_> = new_dir.entries().iter().collect();
 
-            match old_map.remove(&new_entry.name) {
-                Some(old_entry) => {
+        // Separate handling into parallel writes/updates
+        new_entries.into_par_iter().try_for_each(|new_entry| -> Result<()> {
+            let child_path = current_path.join(&new_entry.name);
+            
+            // We read from the shared old_map, which is fine since we aren't mutating it here.
+            match old_map.get(&new_entry.name) {
+                Some(&old_entry) => {
                     // Entry exists in both old and new.
-                    // If hash and mode are the same, do nothing.
                     if old_entry.hash == new_entry.hash && old_entry.mode == new_entry.mode {
-                        continue;
+                        return Ok(());
                     }
 
-                    // If both are directories, recurse.
                     if old_entry.mode == EntryMode::Directory
                         && new_entry.mode == EntryMode::Directory
                     {
                         self.apply_diff(&old_entry.hash, &new_entry.hash, &child_path)?;
                     } else {
                         // Types differ or file content changed. Overwrite the old entry.
-                        // First, remove the old entry completely.
                         if old_entry.mode == EntryMode::Directory {
-                            fs::remove_dir_all(&child_path)?;
+                            fs::remove_dir_all(&child_path).map_err(JogenError::Io)?;
                         } else {
-                            fs::remove_file(&child_path)?;
+                            fs::remove_file(&child_path).map_err(JogenError::Io)?;
                         }
 
-                        // Now, create the new entry.
                         if new_entry.mode == EntryMode::Directory {
                             self.hydrate_directory(&new_entry.hash, &child_path)?;
                         } else {
@@ -81,15 +82,20 @@ impl<'a> Hydrator<'a> {
                     }
                 }
             }
-        }
+            Ok(())
+        })?;
 
         // 4. Any entry remaining in `old_map` was not in `new_dir`, so delete it.
+        // We do this serially since deletes are generally fast, but we need to check if it's missing.
+        let new_names: std::collections::HashSet<_> = new_dir.entries().iter().map(|e| e.name.as_str()).collect();
         for (name, entry) in old_map {
-            let child_path = current_path.join(name);
-            if entry.mode == EntryMode::Directory {
-                fs::remove_dir_all(child_path)?;
-            } else {
-                fs::remove_file(child_path)?;
+            if !new_names.contains(name.as_str()) {
+                let child_path = current_path.join(name);
+                if entry.mode == EntryMode::Directory {
+                    fs::remove_dir_all(child_path).map_err(JogenError::Io)?;
+                } else {
+                    fs::remove_file(child_path).map_err(JogenError::Io)?;
+                }
             }
         }
 
@@ -100,17 +106,19 @@ impl<'a> Hydrator<'a> {
     pub fn hydrate_directory(&self, tree_hash: &str, path: &Path) -> Result<()> {
         let dir = self.load_directory(tree_hash)?;
         if !path.exists() {
-            fs::create_dir_all(path)?;
+            fs::create_dir_all(path).map_err(JogenError::Io)?;
         }
 
-        for entry in dir.entries() {
+        dir.entries().into_par_iter().try_for_each(|entry| -> Result<()> {
             let child = path.join(&entry.name);
             if entry.mode == EntryMode::Directory {
                 self.hydrate_directory(&entry.hash, &child)?;
             } else {
                 self.write_blob(&entry.hash, &child, entry.mode)?;
             }
-        }
+            Ok(())
+        })?;
+        
         Ok(())
     }
 

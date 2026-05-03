@@ -1,5 +1,7 @@
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use rayon::prelude::*;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::object_store::ObjectStore;
 use crate::objects::blob::Blob;
@@ -10,11 +12,24 @@ use crate::{JogenError, Result};
 
 pub struct Indexer<'a> {
     store: &'a ObjectStore,
+    ignore: Gitignore,
+    root_path: PathBuf,
 }
 
 impl<'a> Indexer<'a> {
-    pub fn new(store: &'a ObjectStore) -> Self {
-        Self { store }
+    pub fn new(store: &'a ObjectStore, root_path: &Path) -> Self {
+        let mut builder = GitignoreBuilder::new(root_path);
+        let jogenignore = root_path.join(".jogenignore");
+        if jogenignore.exists() {
+            let _ = builder.add(jogenignore);
+        }
+        let ignore = builder.build().unwrap_or_else(|_| Gitignore::empty());
+
+        Self {
+            store,
+            ignore,
+            root_path: root_path.to_path_buf(),
+        }
     }
 
     pub fn index_path(&self, path: &Path) -> Result<Option<String>> {
@@ -34,27 +49,44 @@ impl<'a> Indexer<'a> {
             return Ok(None);
         }
 
+        let relative_path = path.strip_prefix(&self.root_path).unwrap_or(path);
+        if self.ignore.matched(relative_path, metadata.is_dir()).is_ignore() {
+            return Ok(None);
+        }
+
         if metadata.is_dir() {
-            let mut directory = Directory::new();
+            let entries: Vec<_> = fs::read_dir(path).map_err(JogenError::Io)?.collect();
 
-            for entry in fs::read_dir(path).map_err(JogenError::Io)? {
-                let entry = entry.map_err(JogenError::Io)?;
-                let child_path = entry.path();
-                let child_name = entry.file_name().to_string_lossy().to_string();
+            let child_results: Result<Vec<Option<DirectoryEntry>>> = entries
+                .into_par_iter()
+                .map(|entry_res| {
+                    let entry = entry_res.map_err(JogenError::Io)?;
+                    let child_path = entry.path();
+                    let child_name = entry.file_name().to_string_lossy().to_string();
 
-                if let Some(child_hash) = self.index_path(&child_path)? {
-                    let child_meta = entry.metadata().map_err(JogenError::Io)?;
-                    let mode = if child_meta.is_dir() {
-                        EntryMode::Directory
+                    if let Some(child_hash) = self.index_path(&child_path)? {
+                        let child_meta = entry.metadata().map_err(JogenError::Io)?;
+                        let mode = if child_meta.is_dir() {
+                            EntryMode::Directory
+                        } else {
+                            EntryMode::File
+                        };
+
+                        Ok(Some(DirectoryEntry {
+                            mode,
+                            name: child_name,
+                            hash: child_hash,
+                        }))
                     } else {
-                        EntryMode::File
-                    };
+                        Ok(None)
+                    }
+                })
+                .collect();
 
-                    directory.add_entry(DirectoryEntry {
-                        mode,
-                        name: child_name,
-                        hash: child_hash,
-                    });
+            let mut directory = Directory::new();
+            for child_opt in child_results? {
+                if let Some(child) = child_opt {
+                    directory.add_entry(child);
                 }
             }
 

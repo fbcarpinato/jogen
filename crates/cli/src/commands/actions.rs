@@ -25,7 +25,7 @@ pub fn snapshot(args: SnapshotArgs) -> Result<()> {
     let repo = JogenRepo::from_cwd()?;
 
     println!("{}", "Scanning workspace...".dimmed());
-    let indexer = Indexer::new(&repo.object_store);
+    let indexer = Indexer::new(&repo.object_store, &repo.root_path);
     let tree_hash = indexer
         .index_path(&repo.root_path)?
         .ok_or_else(|| anyhow::anyhow!("Nothing to snapshot (workspace is empty)"))?;
@@ -86,7 +86,7 @@ pub fn status() -> Result<()> {
     }
 
     // Check for changes
-    let indexer = Indexer::new(&repo.object_store);
+    let indexer = Indexer::new(&repo.object_store, &repo.root_path);
     let workspace_tree_hash = indexer.index_path(&repo.root_path)?;
 
     let head_tree_hash = if let Some(hash) = head_hash {
@@ -156,7 +156,7 @@ pub fn checkout(target: String) -> Result<()> {
         None
     };
 
-    let indexer = Indexer::new(&repo.object_store);
+    let indexer = Indexer::new(&repo.object_store, &repo.root_path);
     let workspace_tree_hash = indexer.index_path(&repo.root_path)?;
 
     if let (Some(head_tree), Some(workspace_tree)) = (head_tree_hash.as_ref(), workspace_tree_hash.as_ref()) {
