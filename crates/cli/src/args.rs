@@ -33,9 +33,15 @@ pub enum Commands {
 
     History {},
 
-    Checkout { hash: String },
+    Checkout {
+        target: String,
+    },
 
-    CreateTrack { name: String },
+    CreateTrack {
+        name: String,
+        #[arg(short, long)]
+        switch: bool,
+    },
 
     ListTracks {},
 }

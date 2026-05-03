@@ -66,7 +66,7 @@ impl<'a> Hydrator<'a> {
 
                         // Now, create the new entry.
                         if new_entry.mode == EntryMode::Directory {
-                            self.hydrate_fresh(&new_entry.hash, &child_path)?;
+                            self.hydrate_directory(&new_entry.hash, &child_path)?;
                         } else {
                             self.write_blob(&new_entry.hash, &child_path, new_entry.mode)?;
                         }
@@ -75,7 +75,7 @@ impl<'a> Hydrator<'a> {
                 None => {
                     // Entry is new. Create it.
                     if new_entry.mode == EntryMode::Directory {
-                        self.hydrate_fresh(&new_entry.hash, &child_path)?;
+                        self.hydrate_directory(&new_entry.hash, &child_path)?;
                     } else {
                         self.write_blob(&new_entry.hash, &child_path, new_entry.mode)?;
                     }
@@ -97,7 +97,7 @@ impl<'a> Hydrator<'a> {
     }
 
     /// Recursively writes a directory tree from the object store to the filesystem.
-    fn hydrate_fresh(&self, tree_hash: &str, path: &Path) -> Result<()> {
+    pub fn hydrate_directory(&self, tree_hash: &str, path: &Path) -> Result<()> {
         let dir = self.load_directory(tree_hash)?;
         if !path.exists() {
             fs::create_dir_all(path)?;
@@ -106,7 +106,7 @@ impl<'a> Hydrator<'a> {
         for entry in dir.entries() {
             let child = path.join(&entry.name);
             if entry.mode == EntryMode::Directory {
-                self.hydrate_fresh(&entry.hash, &child)?;
+                self.hydrate_directory(&entry.hash, &child)?;
             } else {
                 self.write_blob(&entry.hash, &child, entry.mode)?;
             }

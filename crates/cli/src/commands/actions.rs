@@ -65,37 +65,56 @@ pub fn save(args: SaveArgs) -> Result<()> {
     Ok(())
 }
 
-pub fn checkout(target_snapshot_hash: String) -> Result<()> {
+pub fn checkout(target: String) -> Result<()> {
     let repo = JogenRepo::from_cwd()?;
     let hydrator = jogen_core::hydrator::Hydrator::new(&repo.object_store);
 
+    // 1. Resolve target to a snapshot hash and determine if it's a track switch
+    let (target_snapshot_hash, target_track) = if let Some(hash) = repo.ref_store.resolve_track(&target)? {
+        (Some(hash), Some(target.clone()))
+    } else {
+        // If it's not a track, assume it's a hash
+        (Some(target.clone()), None)
+    };
+
+    let target_snapshot_hash = match target_snapshot_hash {
+        Some(hash) => hash,
+        None => return Err(anyhow::anyhow!("Could not resolve target {}", target)),
+    };
+
     println!(
-        "{} Checking out snapshot {}",
+        "{} Checking out {}...",
         "↻".blue(),
-        target_snapshot_hash[..7].yellow()
+        if let Some(ref track) = target_track {
+            track.yellow()
+        } else {
+            target_snapshot_hash[..7].yellow()
+        }
     );
 
-    let current_snapshot_hash = repo
-        .ref_store
-        .read_head()?
-        .ok_or_else(|| anyhow::anyhow!("No snapshots found. Cannot checkout."))?;
+    // 2. Safety check: Are there uncommitted changes?
+    let current_snapshot_hash = repo.ref_store.read_head()?;
 
-    let (_, content) = repo.object_store.read_object(&current_snapshot_hash)?;
-    let current_snapshot = Snapshot::deserialize(&content)?;
-    let head_tree_hash = current_snapshot.directory_hash;
+    let head_tree_hash = if let Some(hash) = current_snapshot_hash {
+        let (_, content) = repo.object_store.read_object(&hash)?;
+        let current_snapshot = Snapshot::deserialize(&content)?;
+        Some(current_snapshot.directory_hash)
+    } else {
+        None
+    };
 
     let indexer = Indexer::new(&repo.object_store);
-    let workspace_tree_hash = indexer
-        .index_path(&repo.root_path)?
-        .ok_or_else(|| anyhow::anyhow!("Workspace is empty"))?;
+    let workspace_tree_hash = indexer.index_path(&repo.root_path)?;
 
-    if workspace_tree_hash != head_tree_hash {
-        return Err(anyhow::anyhow!(
-            "Uncommitted changes found in workspace.\nHEAD tree: {}\nWorkspace: {}\nPlease save or discard changes.",
-            head_tree_hash, workspace_tree_hash
-        ));
+    if let (Some(head_tree), Some(workspace_tree)) = (head_tree_hash.as_ref(), workspace_tree_hash.as_ref()) {
+        if head_tree != workspace_tree {
+            return Err(anyhow::anyhow!(
+                "Uncommitted changes found in workspace.\nPlease save or discard changes before checking out."
+            ));
+        }
     }
 
+    // 3. Resolve target tree
     if !repo.object_store.exists(&target_snapshot_hash) {
         return Err(anyhow::anyhow!(
             "Target snapshot {} not found.",
@@ -115,25 +134,48 @@ pub fn checkout(target_snapshot_hash: String) -> Result<()> {
         ));
     };
 
-    hydrator.apply_diff(&head_tree_hash, &target_tree_hash, &repo.root_path)?;
+    // 4. Apply changes
+    if let Some(head_tree) = head_tree_hash.as_ref() {
+        hydrator.apply_diff(head_tree, &target_tree_hash, &repo.root_path)?;
+    } else {
+        // Initial checkout (empty workspace)
+        hydrator.hydrate_directory(&target_tree_hash, &repo.root_path)?;
+    }
 
-    repo.ref_store.update_head(&target_snapshot_hash)?;
+    // 5. Update HEAD
+    if let Some(track_name) = target_track {
+        repo.ref_store.set_head_to_track(&track_name)?;
+    } else {
+        repo.ref_store.update_head(&target_snapshot_hash)?;
+    }
 
     println!("{} Checkout complete", "✔".green());
 
     Ok(())
 }
 
-pub fn create_track(name: String) -> Result<()> {
+pub fn create_track(name: String, switch: bool) -> Result<()> {
     let repo = JogenRepo::from_cwd()?;
 
-    let current_hash = repo
-        .ref_store
-        .read_head()?
-        .ok_or_else(|| anyhow::anyhow!("Cannot create track: History is empty."))?;
+    let current_hash = repo.ref_store.read_head()?;
 
-    repo.ref_store.create_track(&name, &current_hash)?;
-    println!("{} Created track {}", "✔".green(), name.yellow());
+    if let Some(hash) = current_hash {
+        repo.ref_store.create_track(&name, &hash)?;
+        println!("{} Created track {}", "✔".green(), name.yellow());
+    } else {
+        // "Unborn" track - if we are in a fresh repo, we can still create a track
+        // by pointing HEAD to it. The first 'save' will then create it.
+        println!(
+            "{} Creating unborn track {} (will be created on first save)",
+            "ℹ".blue(),
+            name.yellow()
+        );
+    }
+
+    if switch {
+        repo.ref_store.set_head_to_track(&name)?;
+        println!("{} Switched to track {}", "✔".green(), name.yellow());
+    }
 
     Ok(())
 }

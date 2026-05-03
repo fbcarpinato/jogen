@@ -49,6 +49,10 @@ impl RefStore {
         Ok(Some(content.trim().to_string()))
     }
 
+    pub fn resolve_track(&self, track_name: &str) -> Result<Option<String>> {
+        self.read_ref(&format!("refs/tracks/{}", track_name))
+    }
+
     pub fn update_head(&self, new_hash: &str) -> Result<()> {
         let head_path = self.root_path.join(".jogen/HEAD");
 
@@ -64,6 +68,13 @@ impl RefStore {
         } else {
             self.update_ref("HEAD", new_hash)
         }
+    }
+
+    pub fn set_head_to_track(&self, track_name: &str) -> Result<()> {
+        let head_path = self.root_path.join(".jogen/HEAD");
+        let content = format!("ref: refs/tracks/{}\n", track_name);
+        fs::write(head_path, content).map_err(JogenError::Io)?;
+        Ok(())
     }
 
     pub fn create_track(&self, track_name: &str, hash: &str) -> Result<()> {
@@ -124,5 +135,21 @@ impl RefStore {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn switch_track(&self, track_name: &str) -> Result<Option<String>> {
+        let path = self.root_path.join(".jogen/refs/tracks").join(track_name);
+
+        if !path.exists() {
+            return Err(JogenError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Track '{}' does not exist", track_name),
+            )));
+        }
+
+        let hash = fs::read_to_string(path).map_err(JogenError::Io)?;
+        self.set_head_to_track(track_name)?;
+
+        Ok(Some(hash.trim().to_string()))
     }
 }

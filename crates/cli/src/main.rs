@@ -36,11 +36,11 @@ fn main() -> Result<()> {
         Commands::History {} => {
             commands::tools::history()?;
         }
-        Commands::Checkout { hash } => {
-            commands::actions::checkout(hash)?;
+        Commands::Checkout { target } => {
+            commands::actions::checkout(target)?;
         }
-        Commands::CreateTrack { name } => {
-            commands::actions::create_track(name)?;
+        Commands::CreateTrack { name, switch } => {
+            commands::actions::create_track(name, switch)?;
         }
         Commands::ListTracks {} => {
             commands::actions::list_tracks()?;
