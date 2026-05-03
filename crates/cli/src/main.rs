@@ -43,7 +43,7 @@ fn main() -> Result<()> {
             commands::actions::create_track(name)?;
         }
         Commands::ListTracks {} => {
-            commands::tools::list_tracks()?;
+            commands::actions::list_tracks()?;
         }
     }
 

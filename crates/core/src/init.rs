@@ -22,7 +22,10 @@ pub fn execute(target_path: Option<PathBuf>) -> Result<PathBuf> {
         return Err(JogenError::ProjectExists(root.display().to_string()));
     }
 
-    let folders = vec![jogen_dir.join("objects")];
+    let folders = vec![
+        jogen_dir.join("objects"),
+        jogen_dir.join("refs").join("tracks"),
+    ];
 
     for folder in folders {
         fs::create_dir_all(folder)?;
@@ -33,6 +36,8 @@ pub fn execute(target_path: Option<PathBuf>) -> Result<PathBuf> {
     };
     let config_toml = toml::to_string_pretty(&config)?;
     fs::write(jogen_dir.join("config.toml"), config_toml)?;
+
+    fs::write(jogen_dir.join("HEAD"), "ref: refs/tracks/main\n")?;
 
     Ok(root)
 }
