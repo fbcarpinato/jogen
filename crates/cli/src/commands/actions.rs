@@ -3,7 +3,7 @@ use chrono::Utc;
 use colored::*;
 
 use crate::{
-    args::{InitArgs, SaveArgs},
+    args::{InitArgs, SnapshotArgs},
     commands::JogenRepo,
 };
 
@@ -21,21 +21,21 @@ pub fn handle(args: InitArgs) -> Result<()> {
     Ok(())
 }
 
-pub fn save(args: SaveArgs) -> Result<()> {
+pub fn snapshot(args: SnapshotArgs) -> Result<()> {
     let repo = JogenRepo::from_cwd()?;
 
     println!("{}", "Scanning workspace...".dimmed());
     let indexer = Indexer::new(&repo.object_store);
     let tree_hash = indexer
         .index_path(&repo.root_path)?
-        .ok_or_else(|| anyhow::anyhow!("Nothing to save (workspace is empty)"))?;
+        .ok_or_else(|| anyhow::anyhow!("Nothing to snapshot (workspace is empty)"))?;
 
     let parent_hashes = match repo.ref_store.read_head()? {
         Some(parent_hash) => vec![parent_hash],
         None => vec![],
     };
 
-    let snapshot = Snapshot::new(
+    let snapshot_obj = Snapshot::new(
         tree_hash,
         parent_hashes.clone(),
         "Jogen User <user@jogen.com>".to_string(),
@@ -46,20 +46,73 @@ pub fn save(args: SaveArgs) -> Result<()> {
 
     let snapshot_hash = repo
         .object_store
-        .write_object(snapshot.serialize()?.as_ref(), ObjectType::Snapshot)?;
+        .write_object(snapshot_obj.serialize()?.as_ref(), ObjectType::Snapshot)?;
 
     repo.ref_store.update_head(&snapshot_hash)?;
 
     println!(
-        "{} Saved snapshot {}",
+        "{} Created snapshot {}",
         "✔".green(),
         snapshot_hash[..7].yellow()
     );
 
     if parent_hashes.is_empty() {
-        println!("{}", "(Root Commit)".dimmed());
+        println!("{}", "(Root Snapshot)".dimmed());
     } else {
         println!("Parent: {}", parent_hashes[0][..7].dimmed());
+    }
+
+    Ok(())
+}
+
+pub fn status() -> Result<()> {
+    let repo = JogenRepo::from_cwd()?;
+
+    let current_track = repo.ref_store.current_track()?;
+    let head_hash = repo.ref_store.read_head()?;
+
+    println!("{} Project Status", "---".dimmed());
+
+    if let Some(track) = current_track {
+        println!("Active Track: {}", track.yellow().bold());
+    } else if head_hash.is_some() {
+        println!("Active Track: {}", "Detached HEAD".red().bold());
+    } else {
+        println!("Active Track: {}", "None (Initial)".dimmed());
+    }
+
+    if let Some(hash) = head_hash.as_ref() {
+        println!("Last Snapshot: {}", hash[..7].cyan());
+    }
+
+    // Check for changes
+    let indexer = Indexer::new(&repo.object_store);
+    let workspace_tree_hash = indexer.index_path(&repo.root_path)?;
+
+    let head_tree_hash = if let Some(hash) = head_hash {
+        let (_, content) = repo.object_store.read_object(&hash)?;
+        let snapshot_data = Snapshot::deserialize(&content)?;
+        Some(snapshot_data.directory_hash)
+    } else {
+        None
+    };
+
+    match (head_tree_hash, workspace_tree_hash) {
+        (Some(head), Some(work)) => {
+            if head == work {
+                println!("{}", "Workspace is clean.".green());
+            } else {
+                println!("{}", "Uncommitted changes present.".yellow().bold());
+                println!("  (Use 'jogen snapshot' to record your work)");
+            }
+        }
+        (None, Some(_)) => {
+            println!("{}", "Initial snapshot pending.".yellow().bold());
+            println!("  (Use 'jogen snapshot' to record your first state)");
+        }
+        _ => {
+            println!("{}", "Workspace is empty.".dimmed());
+        }
     }
 
     Ok(())
@@ -97,8 +150,8 @@ pub fn checkout(target: String) -> Result<()> {
 
     let head_tree_hash = if let Some(hash) = current_snapshot_hash {
         let (_, content) = repo.object_store.read_object(&hash)?;
-        let current_snapshot = Snapshot::deserialize(&content)?;
-        Some(current_snapshot.directory_hash)
+        let snapshot_data = Snapshot::deserialize(&content)?;
+        Some(snapshot_data.directory_hash)
     } else {
         None
     };
@@ -109,7 +162,7 @@ pub fn checkout(target: String) -> Result<()> {
     if let (Some(head_tree), Some(workspace_tree)) = (head_tree_hash.as_ref(), workspace_tree_hash.as_ref()) {
         if head_tree != workspace_tree {
             return Err(anyhow::anyhow!(
-                "Uncommitted changes found in workspace.\nPlease save or discard changes before checking out."
+                "Uncommitted changes found in workspace.\nPlease snapshot or discard changes before checking out."
             ));
         }
     }
@@ -164,9 +217,9 @@ pub fn create_track(name: String, switch: bool) -> Result<()> {
         println!("{} Created track {}", "✔".green(), name.yellow());
     } else {
         // "Unborn" track - if we are in a fresh repo, we can still create a track
-        // by pointing HEAD to it. The first 'save' will then create it.
+        // by pointing HEAD to it. The first 'snapshot' will then create it.
         println!(
-            "{} Creating unborn track {} (will be created on first save)",
+            "{} Creating unborn track {} (will be created on first snapshot)",
             "ℹ".blue(),
             name.yellow()
         );

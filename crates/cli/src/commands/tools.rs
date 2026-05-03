@@ -49,7 +49,7 @@ pub fn write_directory() -> Result<()> {
 
     match indexer.index_path(&repo.root_path)? {
         Some(hash) => println!("{}", hash.cyan()),
-        None => println!("{}", "Nothing to save (empty project)".yellow()),
+        None => println!("{}", "Nothing to snapshot (empty project)".yellow()),
     }
 
     Ok(())
@@ -144,7 +144,7 @@ pub fn read_snapshot(hash: String) -> Result<()> {
     Ok(())
 }
 
-pub fn history() -> Result<()> {
+pub fn log() -> Result<()> {
     let repo = JogenRepo::from_cwd()?;
 
     let mut current_hash = {

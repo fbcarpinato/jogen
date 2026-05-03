@@ -15,35 +15,26 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Initialize a new Jogen project
     Init(InitArgs),
 
-    HashObject { file: PathBuf },
+    /// Take a snapshot of the current workspace
+    Snapshot(SnapshotArgs),
 
-    CatFile { hash: String },
+    /// Show the current state of the workspace
+    Status,
 
-    WriteDirectory {},
+    /// Show the snapshot log
+    Log,
 
-    ReadDirectory { hash: String },
+    /// Restore the workspace to a specific snapshot or track
+    Checkout { target: String },
 
-    WriteSnapshot {},
+    /// Manage tracks (branches)
+    Track(TrackArgs),
 
-    ReadSnapshot { hash: String },
-
-    Save(SaveArgs),
-
-    History {},
-
-    Checkout {
-        target: String,
-    },
-
-    CreateTrack {
-        name: String,
-        #[arg(short, long)]
-        switch: bool,
-    },
-
-    ListTracks {},
+    /// Low-level plumbing tools
+    Tools(ToolArgs),
 }
 
 #[derive(Args)]
@@ -52,10 +43,53 @@ pub struct InitArgs {
 }
 
 #[derive(Args)]
-pub struct SaveArgs {
+pub struct SnapshotArgs {
+    /// Description of the changes
     #[arg(short, long)]
     pub message: String,
 
+    /// The intent of these changes
     #[arg(short, long, value_enum)]
     pub context: SnapshotContext,
+}
+
+#[derive(Args)]
+pub struct TrackArgs {
+    #[command(subcommand)]
+    pub command: TrackSubcommands,
+}
+
+#[derive(Subcommand)]
+pub enum TrackSubcommands {
+    /// List all tracks
+    List,
+    /// Create a new track
+    Create {
+        name: String,
+        /// Switch to the new track immediately
+        #[arg(short, long)]
+        switch: bool,
+    },
+}
+
+#[derive(Args)]
+pub struct ToolArgs {
+    #[command(subcommand)]
+    pub command: ToolSubcommands,
+}
+
+#[derive(Subcommand)]
+pub enum ToolSubcommands {
+    /// Calculate hash and write blob from file
+    Hash { file: PathBuf },
+    /// Provide content or type and size information for repository objects
+    Cat { hash: String },
+    /// Create a tree object from the current directory
+    WriteDir,
+    /// Read a directory object
+    ReadDir { hash: String },
+    /// Create a snapshot object
+    WriteSnapshot,
+    /// Read a snapshot object
+    ReadSnapshot { hash: String },
 }

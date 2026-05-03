@@ -2,7 +2,7 @@ mod args;
 mod commands;
 
 use anyhow::Result;
-use args::{Cli, Commands};
+use args::{Cli, Commands, ToolSubcommands, TrackSubcommands};
 use clap::Parser;
 
 fn main() -> Result<()> {
@@ -12,39 +12,46 @@ fn main() -> Result<()> {
         Commands::Init(args) => {
             commands::actions::handle(args)?;
         }
-        Commands::HashObject { file } => {
-            commands::tools::hash_object(file)?;
+        Commands::Snapshot(args) => {
+            commands::actions::snapshot(args)?;
         }
-        Commands::CatFile { hash } => {
-            commands::tools::cat_file(hash)?;
+        Commands::Status => {
+            commands::actions::status()?;
         }
-        Commands::WriteDirectory {} => {
-            commands::tools::write_directory()?;
-        }
-        Commands::ReadDirectory { hash } => {
-            commands::tools::read_directory(hash)?;
-        }
-        Commands::WriteSnapshot {} => {
-            commands::tools::write_snapshot()?;
-        }
-        Commands::ReadSnapshot { hash } => {
-            commands::tools::read_snapshot(hash)?;
-        }
-        Commands::Save(args) => {
-            commands::actions::save(args)?;
-        }
-        Commands::History {} => {
-            commands::tools::history()?;
+        Commands::Log => {
+            commands::tools::log()?;
         }
         Commands::Checkout { target } => {
             commands::actions::checkout(target)?;
         }
-        Commands::CreateTrack { name, switch } => {
-            commands::actions::create_track(name, switch)?;
-        }
-        Commands::ListTracks {} => {
-            commands::actions::list_tracks()?;
-        }
+        Commands::Track(args) => match args.command {
+            TrackSubcommands::List => {
+                commands::actions::list_tracks()?;
+            }
+            TrackSubcommands::Create { name, switch } => {
+                commands::actions::create_track(name, switch)?;
+            }
+        },
+        Commands::Tools(args) => match args.command {
+            ToolSubcommands::Hash { file } => {
+                commands::tools::hash_object(file)?;
+            }
+            ToolSubcommands::Cat { hash } => {
+                commands::tools::cat_file(hash)?;
+            }
+            ToolSubcommands::WriteDir => {
+                commands::tools::write_directory()?;
+            }
+            ToolSubcommands::ReadDir { hash } => {
+                commands::tools::read_directory(hash)?;
+            }
+            ToolSubcommands::WriteSnapshot => {
+                commands::tools::write_snapshot()?;
+            }
+            ToolSubcommands::ReadSnapshot { hash } => {
+                commands::tools::read_snapshot(hash)?;
+            }
+        },
     }
 
     Ok(())
