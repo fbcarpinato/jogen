@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use crate::merge::{MergeConflict, MergeConflictIncoming};
 use crate::object_store::ObjectStore;
 use crate::objects::directory::{Directory, EntryMode};
 use crate::{JogenError, Result};
@@ -138,17 +139,69 @@ impl<'a> Hydrator<'a> {
     fn write_blob(&self, hash: &str, path: &Path, mode: EntryMode) -> Result<()> {
         let (_, content) = self.store.read_object(hash)?;
         if let Some(p) = path.parent() {
-            fs::create_dir_all(p)?;
+            fs::create_dir_all(p).map_err(JogenError::Io)?;
         }
 
-        fs::write(path, content)?;
+        fs::write(path, content).map_err(JogenError::Io)?;
 
         #[cfg(unix)]
         if mode == EntryMode::Executable {
-            let mut perms = fs::metadata(path)?.permissions();
+            let mut perms = fs::metadata(path).map_err(JogenError::Io)?.permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(path, perms)?;
+            fs::set_permissions(path, perms).map_err(JogenError::Io)?;
         }
         Ok(())
+    }
+
+    fn incoming_conflict_rel_path(path_str: &str) -> PathBuf {
+        let mut incoming_path = PathBuf::from(path_str);
+        if let Some(ext) = incoming_path.extension() {
+            let new_ext = format!("incoming.{}", ext.to_string_lossy());
+            incoming_path.set_extension(new_ext);
+        } else {
+            incoming_path.set_extension("incoming");
+        }
+        incoming_path
+    }
+
+    /// Writes incoming versions of conflicted files alongside originals with a .incoming extension.
+    /// Returns the created conflict marker paths relative to repo root.
+    pub fn write_conflict_files(&self, conflicts: &[MergeConflict], root_path: &Path) -> Result<Vec<String>> {
+        let mut incoming_paths = Vec::with_capacity(conflicts.len());
+
+        for conflict in conflicts {
+            let incoming_rel_path = Self::incoming_conflict_rel_path(&conflict.path);
+            let incoming_path = root_path.join(&incoming_rel_path);
+
+            if let Some(parent) = incoming_path.parent() {
+                fs::create_dir_all(parent).map_err(JogenError::Io)?;
+            }
+
+            match &conflict.incoming {
+                MergeConflictIncoming::BlobHash(incoming_hash) => {
+                    let (kind, content) = self.store.read_object(incoming_hash)?;
+                    if kind == crate::object_store::ObjectType::Blob {
+                        fs::write(&incoming_path, content).map_err(JogenError::Io)?;
+                    } else {
+                        fs::write(
+                            &incoming_path,
+                            b"Incoming side is not a file. Resolve manually, then remove this marker.\n",
+                        )
+                        .map_err(JogenError::Io)?;
+                    }
+                }
+                MergeConflictIncoming::Deleted => {
+                    fs::write(
+                        &incoming_path,
+                        b"Deleted in incoming target. Keep or delete original file, then remove this marker.\n",
+                    )
+                    .map_err(JogenError::Io)?;
+                }
+            }
+
+            incoming_paths.push(incoming_rel_path.to_string_lossy().to_string());
+        }
+
+        Ok(incoming_paths)
     }
 }

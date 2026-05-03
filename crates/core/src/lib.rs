@@ -1,9 +1,12 @@
+pub mod graph;
 pub mod hydrator;
 pub mod indexer;
 pub mod init;
+pub mod merge;
 pub mod object_store;
 pub mod objects;
 pub mod ref_store;
+pub mod semantic;
 
 use std::path::{Path, PathBuf};
 use thiserror::Error;

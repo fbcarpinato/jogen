@@ -5,6 +5,13 @@ pub struct RefStore {
     root_path: PathBuf,
 }
 
+pub struct IntegrationStatus {
+    pub base_hash: String,
+    pub target_hash: String,
+    pub target_name: String,
+    pub conflict_paths: Vec<String>,
+}
+
 impl RefStore {
     pub fn new(root_path: PathBuf) -> Self {
         Self { root_path }
@@ -151,5 +158,72 @@ impl RefStore {
         self.set_head_to_track(track_name)?;
 
         Ok(Some(hash.trim().to_string()))
+    }
+
+    pub fn begin_integration(
+        &self,
+        base_hash: &str,
+        target_hash: &str,
+        target_name: &str,
+        conflict_paths: &[String],
+    ) -> Result<()> {
+        let path = self.root_path.join(".jogen/INTEGRATING");
+        let mut content = format!(
+            "{}\n{}\n{}\nconflicts {}",
+            base_hash,
+            target_hash,
+            target_name,
+            conflict_paths.len()
+        );
+        for conflict_path in conflict_paths {
+            content.push('\n');
+            content.push_str(conflict_path);
+        }
+        fs::write(path, content).map_err(JogenError::Io)?;
+        Ok(())
+    }
+
+    pub fn get_integration_status(&self) -> Result<Option<IntegrationStatus>> {
+        let path = self.root_path.join(".jogen/INTEGRATING");
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let content = fs::read_to_string(path).map_err(JogenError::Io)?;
+        let mut lines = content.lines();
+        let base = lines.next().unwrap_or("").to_string();
+        let target_hash = lines.next().unwrap_or("").to_string();
+        let target_name = lines.next().unwrap_or("").to_string();
+
+        if target_hash.is_empty() {
+            return Ok(None);
+        }
+
+        let mut conflict_paths = Vec::new();
+        if let Some(conflict_header) = lines.next() {
+            if let Some(count_str) = conflict_header.strip_prefix("conflicts ") {
+                let count = count_str.parse::<usize>().unwrap_or(0);
+                for _ in 0..count {
+                    if let Some(path) = lines.next() {
+                        conflict_paths.push(path.to_string());
+                    }
+                }
+            }
+        }
+
+        Ok(Some(IntegrationStatus {
+            base_hash: base,
+            target_hash,
+            target_name,
+            conflict_paths,
+        }))
+    }
+
+    pub fn clear_integration(&self) -> Result<()> {
+        let path = self.root_path.join(".jogen/INTEGRATING");
+        if path.exists() {
+            fs::remove_file(path).map_err(JogenError::Io)?;
+        }
+        Ok(())
     }
 }

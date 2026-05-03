@@ -11,3 +11,5 @@ clap.workspace = true
 
 colored = "3.0.0"
 chrono = "0.4.42"
+walkdir = "2.5.0"
+similar = "3.1.0"

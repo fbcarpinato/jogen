@@ -144,40 +144,78 @@ pub fn read_snapshot(hash: String) -> Result<()> {
     Ok(())
 }
 
-pub fn log() -> Result<()> {
+pub fn log(expand: bool) -> Result<()> {
     let repo = JogenRepo::from_cwd()?;
 
-    let mut current_hash = {
-        let ref_store = jogen_core::ref_store::RefStore::new(repo.root_path);
+    let head_hash = {
+        let ref_store = jogen_core::ref_store::RefStore::new(repo.root_path.clone());
         ref_store
             .read_head()?
             .ok_or_else(|| anyhow::anyhow!("No snapshots found (head is empty)"))?
     };
 
-    while !current_hash.is_empty() {
-        let (kind, content) = repo.object_store.read_object(&current_hash)?;
+    if expand {
+        let mut queue = std::collections::VecDeque::new();
+        let mut visited = std::collections::HashSet::new();
 
-        if kind != ObjectType::Snapshot {
-            return Err(anyhow::anyhow!(
-                "Object {} is a {}, not a snapshot",
-                current_hash,
-                kind
-            ));
+        queue.push_back(head_hash.clone());
+        visited.insert(head_hash);
+
+        while let Some(current_hash) = queue.pop_front() {
+            let (kind, content) = repo.object_store.read_object(&current_hash)?;
+
+            if kind != ObjectType::Snapshot {
+                continue;
+            }
+
+            let snapshot = Snapshot::deserialize(&content)?;
+
+            println!("{} {}", "Snapshot:".dimmed(), current_hash.green().bold());
+            println!("Author:    {}", snapshot.author.yellow());
+            println!("Timestamp: {}", snapshot.timestamp.to_string().yellow());
+            println!("Context:   {}", format!("{:?}", snapshot.context).yellow());
+            
+            if snapshot.parent_hashes.len() > 1 {
+                println!("Merge:     {}", snapshot.parent_hashes.join(", ").dimmed());
+            }
+
+            println!("Message:   {}", snapshot.message);
+            println!();
+
+            for parent in snapshot.parent_hashes {
+                if visited.insert(parent.clone()) {
+                    queue.push_back(parent);
+                }
+            }
         }
+    } else {
+        let mut current_hash = head_hash;
 
-        let snapshot = Snapshot::deserialize(&content)?;
+        while !current_hash.is_empty() {
+            let (kind, content) = repo.object_store.read_object(&current_hash)?;
 
-        println!("{} {}", "Snapshot:".dimmed(), current_hash.green().bold());
-        println!("Author:    {}", snapshot.author.yellow());
-        println!("Timestamp: {}", snapshot.timestamp.to_string().yellow());
-        println!("Context:   {}", format!("{:?}", snapshot.context).yellow());
-        println!("Message:   {}", snapshot.message);
-        println!();
+            if kind != ObjectType::Snapshot {
+                return Err(anyhow::anyhow!(
+                    "Object {} is a {}, not a snapshot",
+                    current_hash,
+                    kind
+                ));
+            }
 
-        if snapshot.parent_hashes.is_empty() {
-            break;
-        } else {
-            current_hash = snapshot.parent_hashes[0].clone();
+            let snapshot = Snapshot::deserialize(&content)?;
+
+            println!("{} {}", "Snapshot:".dimmed(), current_hash.green().bold());
+            println!("Author:    {}", snapshot.author.yellow());
+            println!("Timestamp: {}", snapshot.timestamp.to_string().yellow());
+            println!("Context:   {}", format!("{:?}", snapshot.context).yellow());
+            println!("Message:   {}", snapshot.message);
+            println!();
+
+            if snapshot.parent_hashes.is_empty() {
+                break;
+            } else {
+                current_hash = snapshot.parent_hashes[0].clone();
+            }
         }
     }
 

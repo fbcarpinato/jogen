@@ -18,11 +18,17 @@ fn main() -> Result<()> {
         Commands::Status => {
             commands::actions::status()?;
         }
-        Commands::Log => {
-            commands::tools::log()?;
+        Commands::Log { expand } => {
+            commands::tools::log(expand)?;
         }
         Commands::Checkout { target } => {
             commands::actions::checkout(target)?;
+        }
+        Commands::Diff { file } => {
+            commands::actions::diff(file)?;
+        }
+        Commands::Integrate(args) => {
+            commands::actions::integrate(args)?;
         }
         Commands::Track(args) => match args.command {
             TrackSubcommands::List => {

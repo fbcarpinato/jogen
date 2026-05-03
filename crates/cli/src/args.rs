@@ -25,10 +25,20 @@ pub enum Commands {
     Status,
 
     /// Show the snapshot log
-    Log,
+    Log {
+        /// Show full history graph (all parents) instead of linear first-parent view
+        #[arg(short, long)]
+        expand: bool,
+    },
 
     /// Restore the workspace to a specific snapshot or track
     Checkout { target: String },
+
+    /// Semantically compare a file with its incoming version during a conflict
+    Diff { file: PathBuf },
+
+    /// Integrate a track into the current track
+    Integrate(IntegrateArgs),
 
     /// Manage tracks (branches)
     Track(TrackArgs),
@@ -40,6 +50,20 @@ pub enum Commands {
 #[derive(Args)]
 pub struct InitArgs {
     pub path: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct IntegrateArgs {
+    /// The target track or snapshot to integrate
+    pub target: Option<String>,
+
+    /// Continue integration after resolving conflicts
+    #[arg(long)]
+    pub r#continue: bool,
+
+    /// Abort the current integration and return to previous state
+    #[arg(long)]
+    pub abort: bool,
 }
 
 #[derive(Args)]
